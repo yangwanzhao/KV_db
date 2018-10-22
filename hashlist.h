@@ -11,7 +11,7 @@
 typedef struct _Node
 {
 	std::string key;
-    u32 id;
+    u32 id,len_key,len_value;
     std::string value;
     struct _Node *next;        
 }Node,*pNode;
@@ -30,10 +30,12 @@ pHash_List init_hash_list(void);
 //pHash_Header init_hash_header(void);
 //pNode init_node_header(void);
 //void init_all_node_header(void);
-pNode insert_node_to_hash(pHash_List plist,std::string key,std::string value);
-int delete_node_to_hash(pHash_List plist,std::string key);
+std::string insert_node_to_hash(pHash_List plist,std::string data);
+std::string delete_node_to_hash(pHash_List plist,std::string data);
 void print_hash(pHash_List plist);
+std::string get_node_to_hash(pHash_List plist, std::string data);
 void free_all_hash(pHash_List plist); 
+std::string regexp_node_to_hash(pHash_List plist, std::string data);
  
  
 #endif
