@@ -4,6 +4,8 @@
 #include <boost/asio.hpp>
 
 using namespace std;
+
+#define BUF_SIZE 4096
 /**
  * Connect to a server so that we can have bidirectional communication on the 
  * socket (represented by a file descriptor) that this function returns
@@ -156,23 +158,53 @@ void echo_client(boost::asio::ip::tcp::socket &socket){
 
 
     //ready to recieve data from server
-    size_t recd = 0;
-    char buf[128];
+    size_t recd = 0, position;
+    unsigned char buf[BUF_SIZE];
+    // vector<unsigned char> buf;
     size_t len;
+    stringstream stream;
+    string str_buf;
     boost::system::error_code ignored_error;
     write(socket, buffer(data), ignored_error);
     xmitBytes += data.length();
-    cout << "Server: ";
-    while (recd < data.length()){
+    
+    cout << "Server:" << endl;
+    str_buf = "";
+    while (true)
+    {
       len = socket.read_some(boost::asio::buffer(buf), ignored_error);
-      if (len > 0){
-        recd += len;
-        buf[len] = 0;
-        cout << buf;
+
+      for (int i = 0; i < len; ++i)
+      {
+        stream << buf[i];
+      }
+
+      str_buf = stream.str();
+      position = str_buf.find("\n");
+      if ( position < str_buf.length() )
+      {
+        recd = stoi(str_buf.substr(0, position));
+        break;
       }
     }
 
-    cout << endl;
+    stream.str("");
+
+    while(str_buf.length()<recd+1+to_string(recd).length())
+    {
+      len = socket.read_some(boost::asio::buffer(buf), ignored_error);
+      for (int i = 0; i < len; ++i)
+      {
+        stream << buf[i];
+      }
+      str_buf = str_buf + stream.str();
+      stream.str("");
+    }
+
+    position = str_buf.find("\n");
+    str_buf = str_buf.substr(position+1);
+
+    cout << str_buf << endl;
   }
   gettimeofday(&end_time, nullptr);
   cout << endl

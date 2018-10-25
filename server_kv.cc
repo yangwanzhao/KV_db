@@ -59,14 +59,11 @@ public:
     data = stream.str();
 
     // ********** de-protocol ***********
-    cout << "1 " << data << endl;
     position = data.find("\n");
-    cout << "2 " << data << endl;
     if (position <= data.length())
     {
       command = data.substr(0, position);
       data = data.substr(position+1);
-      cout << "3 " << data << endl;
       if (command == "PUT")
       {
         response = insert_node_to_hash(plist, data);
@@ -92,17 +89,14 @@ public:
       /* code */
       }
       data = response;
-      cout << "4 " << data << endl;
-      // strange code!!!
-      for (int i = 0; i < data.length(); ++i)
-      {
-        buffer_[i] = data[i];
-        cout << i << ": " << buffer_[i] << endl;
-      }
-      length = data.length();
-      cout << "length" << length << endl;
     }
-    cout << "5 " << data << endl;
+
+    data = to_string(data.length()) + "\n" + data;
+    for (int i = 0; i < data.length(); ++i)
+    {
+      buffer_[i] = data[i];
+    }
+    length = data.length();
     DoWrite(length);
   }
   
