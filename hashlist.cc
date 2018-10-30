@@ -3,12 +3,64 @@
 #include <stdlib.h>
 #include <iostream>
 #include <functional>
+#include <v8.h>
 #include <regex>
+#include <boost/filesystem.hpp>
+#include <libgen.h>
+#include <unistd.h>
+#include <boost/asio.hpp>
 
+#include "common.h"
+#include "print.h"
 #include "hashlist.h"
 
 using namespace std;
-//pHash_Header hash_list[HASH_NUM_MAX];
+using namespace v8;
+
+
+// v8 part
+static char fil_share[128]; // for shared key between c++ and js - filter
+static char com_share[4096];
+static char com_res_share[128];
+// vector<string> com_share;   // for shared value vector between c++ and js - combine
+
+static Handle<Value> FilGetter(Local<String> name, const AccessorInfo& info) {
+  return String::New((char*)&fil_share,strlen((char*)&fil_share)); 
+} 
+
+static void FilSetter(Local<String> name, Local<Value> value, const AccessorInfo& info) {
+  Local<String> str = value->ToString(); 
+  str->WriteAscii((char*)&fil_share); 
+}
+
+static Handle<Value> ComGetter(Local<String> name, const AccessorInfo& info) {
+  return String::New((char*)&com_share,strlen((char*)&com_share)); 
+} 
+
+static void ComSetter(Local<String> name, Local<Value> value, const AccessorInfo& info) {
+  Local<String> str = value->ToString(); 
+  str->WriteAscii((char*)&com_share); 
+}
+
+static Handle<Value> ComResGetter(Local<String> name, const AccessorInfo& info) {
+  return String::New((char*)&com_res_share,strlen((char*)&com_res_share)); 
+} 
+
+static void ComResSetter(Local<String> name, Local<Value> value, const AccessorInfo& info) {
+  Local<String> str = value->ToString(); 
+  str->WriteAscii((char*)&com_res_share); 
+}
+
+const std::string load_file(const std::string &name) {
+// use boost to load a file from an input stream: 
+  std::ifstream file{name};
+  const auto file_size = boost::filesystem::file_size(name); 
+  std::string data(file_size, ' ');
+  file.read(data.data(), file_size);
+  return data;
+}
+
+// v8 part
 
 
 /*initial a hashlist*/
@@ -29,41 +81,6 @@ pHash_List init_hash_list(void)
   return plist;
 }
 
-#if 0
-/*initial a hash header*/
-pHash_Header init_hash_header(void)
-{
-    Hash_Header *phead;
-    
-    phead = (Hash_Header *)malloc(sizeof(Hash_Header));
-    phead->next = NULL;
-    
-    return phead;
-}
- 
-/*initial a hash node header*/ 
-pNode init_node_header(void)
-{
-    Node *phead;
-    
-    phead = (Node *)malloc(sizeof(Node));
-    phead->next = NULL;
-    
-    return phead;      
-} 
- 
-/*initial all node header*/
-void init_all_node_header(void)
-{
-    u32 i;
-    Hash_Header *plist;
-    
-    for( i = 0;i < HASH_NUM_MAX;i++)
-    {
-       hash_list[i] = init_hash_header(); 
-    }
-}
-#endif
 /*insert a node by id*/
 string insert_node_to_hash(pHash_List plist, string data)
 {
@@ -97,7 +114,6 @@ string insert_node_to_hash(pHash_List plist, string data)
   ptail->len_key = len_key;
   ptail->len_value = len_value;
 
-
   if( NULL == plist->list[id]->next )
   {
     plist->list[id]->next = ptail;
@@ -107,6 +123,11 @@ string insert_node_to_hash(pHash_List plist, string data)
   pre = plist->list[id]->next;
   while( pre )
   {
+    if (pre->key == ptail->key)
+    {
+      response = "ERROR";
+      return response;
+    }
     p = pre;
     pre = pre->next;   
   }
@@ -140,7 +161,7 @@ string delete_node_to_hash(pHash_List plist,string data)
  } 
  if(key == psea->key )
  {
-   plist->list[id]->next = psea->next;  
+   plist->list[id]->next = psea->next; 
    free(psea);
    response = "OK";
    return response;
@@ -193,7 +214,7 @@ string get_node_to_hash(pHash_List plist, string data)
   
   if(key == psea->key )
   {
-    response = "OK\nRESULT-LEN:" + to_string(psea->len_value) + "\nRESULT:" + psea->value + "\n";
+    response = "OK\nRESULT-LEN:" + to_string(psea->len_value) + "\nRESULT:" + psea->value;
     return response; 
   } 
   if( NULL == psea->next )
@@ -212,7 +233,7 @@ string get_node_to_hash(pHash_List plist, string data)
    }   
  }
 
- response = "OK\nRESULT-LEN:" + to_string(psea->len_value) + "\nRESULT:" + psea->value + "\n";
+ response = "OK\nRESULT-LEN:" + to_string(psea->len_value) + "\nRESULT:" + psea->value;
  return response;  
 }
 
@@ -228,7 +249,6 @@ string regexp_node_to_hash(pHash_List plist, string data)
   // (string) key
   regexp = data.substr(position+1);
 
-
   num_results = 0;
   response = "";
   for( i = 0;i < HASH_NUM_MAX;i++)
@@ -240,46 +260,123 @@ string regexp_node_to_hash(pHash_List plist, string data)
       if (regex_match(p->key, regex(regexp)))
       {
         num_results++;
-        response = response + to_string(p->len_key) + "\n" + p->key + "\n" + to_string(p->len_value) + "\n" + p->value+ "\n";
+        response = response + "\nRESULT-KEY-LEN:" + to_string(p->len_key) + "\nRESULT-KEY:" + p->key + 
+        "\nRESULT-VAL-LEN:" + to_string(p->len_value) + "\nRESULT-VAL:" + p->value;
       }
       p = p->next;
     }        
   }
+  if (num_results > 0)
+  {
+    response = "OK\nNUM-RESULTS:" + to_string(num_results) + response;
+  }
+  else
+  {
+    response = "ERROR";
+  }
 
-  response = to_string(num_results) + "\n" + response;
   return response;
 
-  // for (int i = 0; i < num_results; ++i)
-  // {
-  //   for (int j = 0; j < 4; ++j)
-  //   {
-  //     position = results.find("\n");
-  //     if (position != results.npos)
-  //     {
-  //       sub_str = results.substr(0, position);
-  //       results = results.substr(position+1);
-  //     }
-
-  //     switch (j) {
-  //       case 0:
-  //       cout << "RESULT-KEY-LEN:" << sub_str << endl;
-  //       break;
-  //       case 1:
-  //       cout << "RESULT-KEY:" << sub_str << endl;
-  //       break;
-  //       case 2:
-  //       cout << "RESULT-VAL-LEN:" << sub_str << endl;
-  //       break;
-  //       case 3:
-  //       cout << "RESULT-VAL:" << sub_str << endl;
-  //       break;
-  //       default:
-  //       break;
-  //     }
-  //   }
-  // }
-
 }
+
+// ----------------------- JUST FOR TEST -------------
+void init_hash(pHash_List plist)
+{
+  string data;
+  data = "3\nwww\n2\nqq";
+  insert_node_to_hash(plist, data);
+  data = "4\nwaaa\n5\nqaaaq";
+  insert_node_to_hash(plist, data);
+  data = "5\nqavqw\n7\nqasdfsq";
+  insert_node_to_hash(plist, data);
+  data = "4\nqaqw\n2\nqa";
+  insert_node_to_hash(plist, data);
+  data = "6\nqaa2qw\n4\nq22a";
+  insert_node_to_hash(plist, data);
+}
+// ----------------------- JUST FOR TEST -------------
+
+
+string reduce_node_to_hash(pHash_List plist, string data)
+{
+  // decode filter and combine
+  u32 position, filter_len, combine_len, num_value=0;
+  string filter, combine, key_shared, value_shared, Readonly, response;
+  pNode p; 
+
+  // data: filter_text.length() + "\n" + filter_text + "\n" + combine_text.length() + "\n" + combine_text
+  position = data.find("\n");
+  filter_len = stoi(data.substr(0, position));
+  // data: filter_text + "\n" + combine_text.length() + "\n" + combine_text
+  data = data.substr(position+1);
+  filter = data.substr(0, filter_len);
+  // data: combine_text.length() + "\n" + combine_text
+  data = data.substr(filter_len+2); 
+  position = data.find("\n");
+  combine_len = stoi(data.substr(0, position));
+  // data: combine_text
+  combine = data.substr(position+1);
+  Readonly = "Readonly_Server.js";
+  combine = load_file(Readonly.c_str()) + combine;
+
+
+
+  // cout << "filter:\n" << filter << endl;
+  // cout << "\ncombine:\n" << combine << endl;
+
+
+  Locker locker;
+  // RAII v8 scope manager, to ensure that all handles get cleaned up 
+  HandleScope handle_scope;
+  // a definition of the global context. Anything in this goes into every
+  // context built from it
+  Handle<ObjectTemplate> globalTemplate = ObjectTemplate::New();
+
+  //public the name variable to script 
+  globalTemplate->SetAccessor(String::New("shared_key"), FilGetter, FilSetter);
+  globalTemplate->SetAccessor(String::New("shared_val"), ComGetter, ComSetter);
+  globalTemplate->SetAccessor(String::New("shared_val_res"), ComResGetter, ComResSetter);
+
+  // add print_message to the global template
+  globalTemplate->Set(v8::String::New("print"), 
+    FunctionTemplate::New(print_message)); 
+
+  // create a context in which to run scripts
+  Handle<Context> context = Context::New(NULL, globalTemplate); 
+
+
+  // filter each key value pair
+  for(int i = 0;i < HASH_NUM_MAX;i++)
+  {
+    p = plist->list[i]->next;
+
+    while( NULL != p )
+    {
+      key_shared = p->key;   // what if key == true
+      strcpy(fil_share, key_shared.c_str());
+      run_script(filter, context);
+      key_shared = fil_share;
+      if (key_shared == "true")    // think a better way to return true
+      {
+        num_value++;
+        value_shared = value_shared + to_string(p->value.length()) + "\n" + p->value + "\n";
+      }
+      p = p->next;
+    }        
+  }
+  value_shared = to_string(num_value) + "\n" + value_shared;
+  strcpy(com_share, value_shared.c_str());
+  run_script(combine, context);
+
+  response = com_res_share;
+  response = "OK\nRESULT-LEN:" + to_string(response.length()) + "\nRESULT:" + response;
+
+  return response;
+}
+
+
+
+
 /*print the whole hash table*/
 void print_hash(pHash_List plist)
 {

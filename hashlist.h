@@ -32,11 +32,14 @@ pHash_List init_hash_list(void);
 //void init_all_node_header(void);
 std::string insert_node_to_hash(pHash_List plist,std::string data);
 std::string delete_node_to_hash(pHash_List plist,std::string data);
+std::string reduce_node_to_hash(pHash_List plist,std::string data);
 void print_hash(pHash_List plist);
 std::string get_node_to_hash(pHash_List plist, std::string data);
 void free_all_hash(pHash_List plist); 
 std::string regexp_node_to_hash(pHash_List plist, std::string data);
+
+void init_hash(pHash_List plist); 
  
- 
+
 #endif
 

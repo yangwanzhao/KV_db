@@ -1,11 +1,13 @@
 #include <iostream>
 #include <libgen.h>
+#include <boost/filesystem.hpp>
 #include <unistd.h>
 #include <boost/asio.hpp>
 
 using namespace std;
 
 #define BUF_SIZE 4096
+
 /**
  * Connect to a server so that we can have bidirectional communication on the 
  * socket (represented by a file descriptor) that this function returns
@@ -13,6 +15,15 @@ using namespace std;
  * @param hostname The name of the server (ip or DNS) to connect to 
  * @param port the server's port that we should use
  */
+
+const std::string load_file(const std::string &name) {
+// use boost to load a file from an input stream: 
+  std::ifstream file{name};
+  const auto file_size = boost::filesystem::file_size(name); 
+  std::string data(file_size, ' ');
+  file.read(data.data(), file_size);
+  return data;
+}
 
 boost::asio::ip::tcp::socket connect_to_server(std::string hostname,
  std::string port) {
@@ -58,7 +69,7 @@ void echo_client(boost::asio::ip::tcp::socket &socket){
     {
       cout << "KEY-LEN:";
       getline(cin, str_length_key);
-      length_key = stoi(str_length_key);
+      length_key = stoi(str_length_key);   
       cout << "KEY:";
       getline(cin, key);
       if(key.length() != length_key)
@@ -119,13 +130,22 @@ void echo_client(boost::asio::ip::tcp::socket &socket){
       data = "DEL\n" + str_length_key + "\n" + key;
     }
 
+    // ----------------------- JUST FOR TEST --------------
     // ******* SHOW *******
     else if (data == "SHOW")
     {
       data = "SHOW\n";
     }
+    // ******* INIT *******
+    else if (data == "INIT")
+    {
+      data = "INIT\n";
+    }
+    // ----------------------- JUST FOR TEST -------------
+
 
     // ******* WHERE *******
+    // (.*)(W)(.*) 11
     else if (data == "WHERE")
     {
       cout << "REGEX-LEN:";
@@ -146,7 +166,44 @@ void echo_client(boost::asio::ip::tcp::socket &socket){
     // ******* REDUCE *******
     else if (data == "REDUCE")
     {
-      /* code */
+      cout << "FILTER-LEN:";
+      getline(cin, str_length_key);
+      length_key = stoi(str_length_key);
+      cout << "FILTER:";
+      getline(cin, key);
+      if(key.length() != length_key)
+      {
+        cout << "Length error\n" << endl;
+        continue;
+      }
+      cout << "COMBINE-LEN:";
+      getline(cin, str_length_value);
+      length_value = stoi(str_length_value);
+      cout << "COMBINE:";
+      getline(cin, value);
+      if(value.length() != length_value)
+      {
+        cout << "Length error\n" << endl;
+        continue;
+      }
+
+      string filter_text = load_file(key.c_str());          //remember to give a error capture in case the filename if wrong
+      string combine_text = load_file(value.c_str());
+      data = "REDUCE\n" + to_string(filter_text.length()) + "\n" + filter_text + "\n" + 
+                          to_string(combine_text.length()) + "\n" + combine_text;
+    }
+
+    else if (data == "TESTREDUCE")
+    {
+      length_key = 6;
+      key = "fil.js";
+      length_value = 6;
+      value = "com.js";
+
+      string filter_text = load_file(key.c_str());          //remember to give a error capture in case the filename if wrong
+      string combine_text = load_file(value.c_str());
+      data = "REDUCE\n" + to_string(filter_text.length()) + "\n" + filter_text + "\n" + 
+                          to_string(combine_text.length()) + "\n" + combine_text;
     }
 
     // ******* EXIT *******

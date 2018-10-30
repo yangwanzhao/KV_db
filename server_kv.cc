@@ -10,7 +10,7 @@
 using namespace boost::asio::ip;
 using namespace std;
 
-#define BUF_SIZE 128
+#define BUF_SIZE 4096
 
 pHash_List plist = init_hash_list();
 // plist = init_hash_list();
@@ -51,13 +51,11 @@ public:
     string command, response, data;
     u32 position;
     stringstream stream;
-
     for (int i = 0; i < length; ++i)
     {
       stream << buffer_[i];
     }
     data = stream.str();
-
     // ********** de-protocol ***********
     position = data.find("\n");
     if (position <= data.length())
@@ -80,23 +78,33 @@ public:
       {
         response = regexp_node_to_hash(plist, data);
       }
+
+      // ----------------------- JUST FOR TEST -------------
       else if (command == "SHOW")
       {
         print_hash(plist);
+        response = "SHOWN IN SERVER";
       }
+      else if (command == "INIT")
+      {
+        init_hash(plist);
+        response = "DONE"; 
+      }
+      // ----------------------- JUST FOR TEST -------------
+
       else if (command == "REDUCE")
       {
-      /* code */
+        response = reduce_node_to_hash(plist, data);
       }
-      data = response;
+      data = response;  
     }
-
     data = to_string(data.length()) + "\n" + data;
     for (int i = 0; i < data.length(); ++i)
     {
       buffer_[i] = data[i];
     }
     length = data.length();
+
     DoWrite(length);
   }
   
@@ -104,8 +112,8 @@ public:
 
 private:
   tcp::socket socket_;
+  // vector<unsigned char> buffer_;
   unsigned char buffer_[BUF_SIZE];
-  // std::array<char, BUF_SIZE> buffer_;
 };
 
 
